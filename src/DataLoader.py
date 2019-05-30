@@ -35,7 +35,8 @@ class DataLoader:
         self.batchSize = batchSize
         self.imgSize = imgSize
         self.samples = []
-    
+        self.viz_dir = '../viz_dir/'
+        self.inferDir = '../data/test_words/'
         # Writing your custom loader..
         with open(filePath+'words.txt') as f:
             labels = f.read().split('\n')
@@ -171,6 +172,17 @@ class DataLoader:
         self.currIdx += self.batchSize
         return Batch(targetSplits, imgs)
 
+    def getInferBatch(self):
+        inferSamples = os.listdir(self.inferDir)
+
+        imgs =  [preprocess(cv2.imread(self.inferDir + imgName, cv2.IMREAD_GRAYSCALE), self.imgSize, False) for imgName in inferSamples]
+        
+        # Create a batch with blank labels/targetSplits
+        for i in range(len(imgs)):
+            cv2.imwrite('infer_images/'+str(i)+'.png', imgs[i].T.astype(np.uint8))
+
+        return Batch(None, imgs)
+
     def getTestBatch(self):
         # gray scale images of shape (Model.size[1], Model.size[0])
         targetSplits = []
@@ -184,6 +196,31 @@ class DataLoader:
                 output_array[split] = 1
             targetSplits.append(output_array)
 
-        imgs = [preprocess(cv2.imread(self.testSamples[i].filePath, cv2.IMREAD_GRAYSCALE), self.imgSize, False) for i in range(self.testSize)]
+        imgs = [preprocess(cv2.imread(self.testSamples[i].filePath+'.png', cv2.IMREAD_GRAYSCALE), self.imgSize, False) for i in range(self.testSize)]
+
+        for i in range(len(imgs)):
+            cv2.imwrite('test_images/'+str(i)+'.png', imgs[i].T.astype(np.uint8))
+
 
         return Batch(targetSplits, imgs)
+
+    def vizOutputSplits(self, test_batch):
+        numBatchElements = len(test_batch.imgs)
+        confidence_threshold = 0.7
+
+        for i in range(numBatchElements):
+            img = test_batch.imgs[i].T
+            img = img.astype(np.uint8)
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            predictedSplits = np.array(test_batch.targetSplits[i])
+
+            # print("type(predictedSplits)\n", type(predictedSplits))
+            # Get the index of splits having confidence greater than threshold!
+            predictedSplits = np.where(predictedSplits >= confidence_threshold)[0]
+
+            for split in predictedSplits:
+                ratio = self.imgSize[0] / self.imgSize[1]
+                split = int(split * ratio)
+                cv2.line(img, (split,0), (split, img.shape[0]), (0,0,255), 1)
+
+            cv2.imwrite(self.viz_dir+str(i)+'.png', img)

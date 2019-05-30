@@ -12,7 +12,7 @@ def preprocess(img, imgSize, dataAugmentation=False):
 	# there are damaged files in IAM dataset - just use black image instead
 	if img is None:
 		img = np.zeros([imgSize[1], imgSize[0]])
-
+		print("**Error:Image is None***")
 	# increase dataset size by applying random stretches to the images
 	if dataAugmentation:
 		stretch = (random.random() - 0.5) # -0.5 .. +0.5
@@ -39,5 +39,5 @@ def preprocess(img, imgSize, dataAugmentation=False):
 	s = s[0][0]
 	img = img - m
 	img = img / s if s>0 else img
+	# cv2.imwrite('sample.png', img.T.astype(np.uint8))
 	return img
-

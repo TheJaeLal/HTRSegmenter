@@ -26,6 +26,7 @@ def train(model, loader):
     bestCharErrorRate = float('inf') # best valdiation character error rate
     noImprovementSince = 0 # number of epochs no improvement of character error rate occured
     earlyStopping = 5 # stop training after this number of epochs without improvement
+    
     while True:
         epoch += 1
         print('Epoch:', epoch)
@@ -39,12 +40,19 @@ def train(model, loader):
             test_batch = loader.getTestBatch()
             
             train_loss = model.trainBatch(batch)
-            test_loss = model.testBatch(test_batch)
+            test_loss,predictedSplits = model.testBatch(test_batch)
+            
+            test_batch.targetSplits = predictedSplits
+            loader.vizOutputSplits(test_batch)
+
             print('Batch:', iterInfo[0],'/', iterInfo[1], 'train_loss:', train_loss, 'test_loss:', test_loss)
 
         if epoch > max_epochs:
             break
 
+        if epoch%model.save_epoch==0:
+            print('Saving model!')
+            model.save('../model/new_models/snapshot')
 
         # validate
         # charErrorRate = validate(model, loader)
@@ -96,26 +104,31 @@ def validate(model, loader):
     return charErrorRate
 
 
-def infer(model, fnImg):
-    "recognize text in image provided by file path"
-    img = preprocess(cv2.imread(fnImg, cv2.IMREAD_GRAYSCALE), Model.imgSize)
-    batch = Batch(None, [img])
-    (recognized, probability) = model.inferBatch(batch, True)
-    print('Recognized:', '"' + recognized[0] + '"')
-    print('Probability:', probability[0])
+# def infer(model, fnImg):
+#     "recognize text in image provided by file path"
+#     img = preprocess(cv2.imread(fnImg, cv2.IMREAD_GRAYSCALE), Model.imgSize)
+#     batch = Batch(None, [img])
+#     (recognized, probability) = model.inferBatch(batch, True)
+#     print('Recognized:', '"' + recognized[0] + '"')
+#     print('Probability:', probability[0])
 
+def infer(model, loader):
+    infer_batch = loader.getInferBatch()
+    predictedSplits = model.inferBatch(infer_batch)
+    infer_batch.targetSplits = predictedSplits
+    loader.vizOutputSplits(infer_batch)    
 
 def main():
     "main function"
     # optional command line args
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--train', help='train the NN', action='store_true')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--train', help='train the NN', action='store_true')
     # parser.add_argument('--validate', help='validate the NN', action='store_true')
     # parser.add_argument('--beamsearch', help='use beam search instead of best path decoding', action='store_true')
     # parser.add_argument('--wordbeamsearch', help='use word beam search instead of best path decoding', action='store_true')
     # parser.add_argument('--dump', help='dump output of NN to CSV file(s)', action='store_true')
 
-    # args = parser.parse_args()
+    args = parser.parse_args()
 
     decoderType = DecoderType.BestPath
     # if args.beamsearch:
@@ -136,8 +149,17 @@ def main():
 
         # execute training or validation
         # if args.train:
-    model = Model(decoderType, mustRestore=True)
-    train(model, loader)
+    
+    if args.train:
+        print("----Training----")
+        train_model = Model('../model/', decoderType, mustRestore=True)
+        train(train_model, loader)
+
+    else:
+        print("----Inference----")
+        infer_model = Model('../model/new_models/', decoderType, mustRestore=True)
+        infer(infer_model, loader)
+
         # elif args.validate:
         #     model = Model(loader.charList, decoderType, mustRestore=True)
         #     validate(model, loader)

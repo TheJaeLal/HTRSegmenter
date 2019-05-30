@@ -20,15 +20,16 @@ class Model:
     batchSize = 48
     imgSize = (128, 32)
     maxTextLen = 32
+    save_epoch = 2
 
-    def __init__(self, decoderType=DecoderType.BestPath, mustRestore=False, dump=False):
+    def __init__(self, modelDir, decoderType=DecoderType.BestPath, mustRestore=False, dump=False):
         "init model: add CNN, RNN and CTC and initialize TF"
         # self.dump = dump
         # self.charList = charList
         self.decoderType = decoderType
         self.mustRestore = mustRestore
         self.snapID = 0
-
+        self.restore_variables = []
         # Whether to use normalization over a batch or a population
         self.is_train = tf.placeholder(tf.bool, name='is_train')
 
@@ -37,17 +38,16 @@ class Model:
 
         # setup CNN, RNN and CTC
         self.setupCNN()
+
+        #modified version of RNN
         concat = self.setupRNN()
 
-        # initialize TF
-        (self.sess, self.saver) = self.setupTF()
-
+        # modifications
         # project output to chars (including blank): BxTx1x2H -> BxTx1x1 -> BxT
-        kernel = tf.Variable(tf.truncated_normal([1, 1, 512, 1], stddev=0.1))
+        kernel = tf.Variable(tf.truncated_normal([1, 1, 512, 1], stddev=0.1), name='output_collapse_conv')
         self.rnnOut3d = tf.squeeze(tf.nn.atrous_conv2d(value=concat, filters=kernel, rate=1, padding='SAME'), axis=[2,3])
+        
         self.setupOut()
-
-        # self.setupCTC()
 
         # setup optimizer to train NN
         self.batchesTrained = 0
@@ -55,7 +55,11 @@ class Model:
         self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS) 
         with tf.control_dependencies(self.update_ops):
             self.optimizer = tf.train.RMSPropOptimizer(self.learningRate).minimize(self.loss)
+        
+        # self.initialize_remaining_variables()
+        self.sess, self.saver = self.setupTF(modelDir)
 
+    def initialize_remaining_variables(self):
         # Initialize all uninitialized variables
         uninitialized_vars = []
         for var in tf.all_variables():
@@ -68,7 +72,6 @@ class Model:
 
         self.sess.run(init_new_vars_op)
 
-            
     def setupCNN(self):
         "create CNN layers and return output of these layers"
         cnnIn4d = tf.expand_dims(input=self.inputImgs, axis=3)
@@ -108,10 +111,10 @@ class Model:
                                     
         # BxTxH + BxTxH -> BxTx2H -> BxTx1X2H
         concat = tf.expand_dims(tf.concat([fw, bw], 2), 2)
-                                    
-        # project output to chars (including blank): BxTx1x2H -> BxTx1xC -> BxTxC
-        kernel = tf.Variable(tf.truncated_normal([1, 1, numHidden * 2, 79 + 1], stddev=0.1))
-        self.rnnOut3d = tf.squeeze(tf.nn.atrous_conv2d(value=concat, filters=kernel, rate=1, padding='SAME'), axis=[2])
+           
+        # # project output to chars (including blank): BxTx1x2H -> BxTx1xC -> BxTxC
+        # kernel = tf.Variable(tf.truncated_normal([1, 1, numHidden * 2, 79 + 1], stddev=0.1))
+        # self.rnnOut3d = tf.squeeze(tf.nn.atrous_conv2d(value=concat, filters=kernel, rate=1, padding='SAME'), axis=[2])
         
         return concat
 
@@ -149,23 +152,56 @@ class Model:
 
     def setupOut(self):
         # # Squish everything between 0 to 1
-        # self.out = tf.sigmoid(self.rnnOut3d)
+        self.out = tf.sigmoid(self.rnnOut3d)
 
         # Define label Tensor
         self.targetSplits = tf.placeholder(tf.float32, shape=(None, Model.imgSize[1]))
-        self.loss = tf.losses.sigmoid_cross_entropy(self.targetSplits,self.rnnOut3d)
+        self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.targetSplits,logits = self.rnnOut3d))
 
 
-    def setupTF(self):
+    def setupTF(self, modelDir):
         "initialize TF"
         print('Python: '+sys.version)
         print('Tensorflow: '+tf.__version__)
 
+
+        # modelDir = '../model/'
+        print('modelDir:', modelDir)
+        latestSnapshot = tf.train.latest_checkpoint(modelDir) # is there a saved model?
+        print('LatestSnaphshot:',latestSnapshot)
+
         sess=tf.Session() # TF session
 
-        saver = tf.train.Saver(max_to_keep=5) # saver saves model to file
-        modelDir = '../model/'
-        latestSnapshot = tf.train.latest_checkpoint(modelDir) # is there a saved model?
+        # Initialize all global variables..
+        sess.run(tf.global_variables_initializer())
+
+        saved_variable_names = [var_name+':0' for var_name, var_shape in tf.train.list_variables(latestSnapshot)]
+        # print('---Saved Variables---')
+        # print(type(saved_variable_names))
+        # for variable in saved_variable_names:
+        #     print(type(variable),':',variable)
+
+        saved_var_name_set = set(saved_variable_names)
+
+        model_variable_names = [var.name for var in tf.get_collection_ref(tf.GraphKeys.GLOBAL_VARIABLES)]
+        # print('---Model Variables---')
+        # for variable in model_variable_names:
+        #     print(type(variable),':',variable)
+
+        model_var_name_set = set(model_variable_names)
+
+        variables_can_be_restored = list(model_var_name_set.intersection(saved_var_name_set)) 
+
+        variables_can_be_restored = [sess.graph.get_tensor_by_name(var_name) for var_name in variables_can_be_restored]
+
+        # exit(0)
+        saver = tf.train.Saver(variables_can_be_restored,max_to_keep=5) # saver saves model to file
+
+        # inspect_list = tf.train.list_variables(latestSnapshot)
+        # print('------Printing Variables in Checkpoint------:')
+
+        # for variable in inspect_list:
+        #     print(variable)
 
         # if model must be restored (for inference), there must be a snapshot
         if self.mustRestore and not latestSnapshot:
@@ -174,10 +210,18 @@ class Model:
         # load saved model if available
         if latestSnapshot:
             print('Init with stored values from ' + latestSnapshot)
-            saver.restore(sess, latestSnapshot)
+            try:
+                saver.restore(sess, latestSnapshot)
+            except:
+                tf.errors.NotFoundError('')
+
         else:
             print('Init with new values')
             sess.run(tf.global_variables_initializer())
+
+
+        # redeclare which variables can be saved...
+        saver = tf.train.Saver(max_to_keep=5)
 
         return (sess,saver)
 
@@ -240,7 +284,8 @@ class Model:
         
         rate = 0.001 if self.batchesTrained < 10 else (0.001 if self.batchesTrained < 10000 else 0.0001) # decay learning rate
         evalList = [self.optimizer, self.loss]
-        feedDict = {self.inputImgs : batch.imgs, self.targetSplits: batch.targetSplits, self.learningRate : rate, self.is_train: True}
+        feedDict = {self.inputImgs : batch.imgs, self.targetSplits: batch.targetSplits,
+                    self.learningRate : rate, self.is_train: True}
         (_, lossVal) = self.sess.run(evalList, feedDict)
         self.batchesTrained += 1
         return lossVal
@@ -250,9 +295,20 @@ class Model:
         numBatchElements = len(batch.imgs)
         
         feedDict = {self.inputImgs : batch.imgs, self.targetSplits: batch.targetSplits, self.is_train: False}
-        lossVal = self.sess.run(self.loss, feedDict)
+        lossVal, predictedSplits = self.sess.run([self.loss,self.out], feedDict)
+        print(predictedSplits)
         # self.batchesTrained += 1
-        return lossVal
+        return lossVal, predictedSplits
+
+    def inferBatch(self, batch):
+        "feed a batch into the NN for inference"
+        numBatchElements = len(batch.imgs)
+        
+        feedDict = {self.inputImgs : batch.imgs, self.is_train: False}
+        predictedSplits = self.sess.run(self.out, feedDict)
+        print(predictedSplits)
+        # self.batchesTrained += 1
+        return predictedSplits
 
     def dumpNNOutput(self, rnnOutput):
         "dump the output of the NN to CSV file(s)"
@@ -274,37 +330,37 @@ class Model:
                 f.write(csv)
 
 
-    def inferBatch(self, batch, calcProbability=False, probabilityOfGT=False):
-        "feed a batch into the NN to recognize the texts"
+    # def inferBatch(self, batch, calcProbability=False, probabilityOfGT=False):
+    #     "feed a batch into the NN to recognize the texts"
         
-        # decode, optionally save RNN output
-        numBatchElements = len(batch.imgs)
-        evalRnnOutput = self.dump or calcProbability
-        evalList = [self.decoder] + ([self.ctcIn3dTBC] if evalRnnOutput else [])
-        feedDict = {self.inputImgs : batch.imgs, self.seqLen : [Model.maxTextLen] * numBatchElements, self.is_train: False}
-        evalRes = self.sess.run(evalList, feedDict)
-        decoded = evalRes[0]
-        texts = self.decoderOutputToText(decoded, numBatchElements)
+    #     # decode, optionally save RNN output
+    #     numBatchElements = len(batch.imgs)
+    #     evalRnnOutput = self.dump or calcProbability
+    #     evalList = [self.decoder] + ([self.ctcIn3dTBC] if evalRnnOutput else [])
+    #     feedDict = {self.inputImgs : batch.imgs, self.seqLen : [Model.maxTextLen] * numBatchElements, self.is_train: False}
+    #     evalRes = self.sess.run(evalList, feedDict)
+    #     decoded = evalRes[0]
+    #     texts = self.decoderOutputToText(decoded, numBatchElements)
         
-        # feed RNN output and recognized text into CTC loss to compute labeling probability
-        probs = None
-        if calcProbability:
-            sparse = self.toSparse(batch.gtTexts) if probabilityOfGT else self.toSparse(texts)
-            ctcInput = evalRes[1]
-            evalList = self.lossPerElement
-            feedDict = {self.savedCtcInput : ctcInput, self.gtTexts : sparse, self.seqLen : [Model.maxTextLen] * numBatchElements, self.is_train: False}
-            lossVals = self.sess.run(evalList, feedDict)
-            probs = np.exp(-lossVals)
+    #     # feed RNN output and recognized text into CTC loss to compute labeling probability
+    #     probs = None
+    #     if calcProbability:
+    #         sparse = self.toSparse(batch.gtTexts) if probabilityOfGT else self.toSparse(texts)
+    #         ctcInput = evalRes[1]
+    #         evalList = self.lossPerElement
+    #         feedDict = {self.savedCtcInput : ctcInput, self.gtTexts : sparse, self.seqLen : [Model.maxTextLen] * numBatchElements, self.is_train: False}
+    #         lossVals = self.sess.run(evalList, feedDict)
+    #         probs = np.exp(-lossVals)
 
-        # dump the output of the NN to CSV file(s)
-        if self.dump:
-            self.dumpNNOutput(evalRes[1])
+    #     # dump the output of the NN to CSV file(s)
+    #     if self.dump:
+    #         self.dumpNNOutput(evalRes[1])
 
-        return (texts, probs)
-    
+    #     return (texts, probs)
 
-    def save(self):
+    def save(self, path):
         "save model to file"
-        self.snapID += 1
-        self.saver.save(self.sess, '../model/snapshot', global_step=self.snapID)
- 
+        self.snapID += self.save_epoch
+        self.saver.save(self.sess, path, global_step=self.snapID)
+
+
