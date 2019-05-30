@@ -25,7 +25,7 @@ class Batch:
 class DataLoader:
     "loads data which corresponds to IAM format, see: http://www.fki.inf.unibe.ch/databases/iam-handwriting-database" 
 
-    def __init__(self, filePath, batchSize, imgSize, maxTextLen):
+    def __init__(self, filePath, batchSize, imgSize):
         "loader for dataset at given location, preprocess images and text according to parameters"
 
         assert filePath[-1]=='/'
@@ -96,24 +96,6 @@ class DataLoader:
         # start with train set
         self.trainSet()
 
-        # list of all chars in dataset
-        # self.charList = sorted(list(chars))
-
-
-    def truncateLabel(self, text, maxTextLen):
-        # ctc_loss can't compute loss if it cannot find a mapping between text label and input 
-        # labels. Repeat letters cost double because of the blank symbol needing to be inserted.
-        # If a too-long label is provided, ctc_loss returns an infinite gradient
-        cost = 0
-        for i in range(len(text)):
-            if i != 0 and text[i] == text[i-1]:
-                cost += 2
-            else:
-                cost += 1
-            if cost > maxTextLen:
-                return text[:i]
-        return text
-
 
     def trainSet(self):
         "switch to randomly chosen subset of training set"
@@ -154,12 +136,14 @@ class DataLoader:
         targetSplits = []
         
         for i in batchRange:
-            output_array = [0]*self.imgSize[1]
+            output_array = [0]*self.imgSize[0]
+            # output_array = [0]*self.imgSize[1]
             for split in self.samples[i].targetSplit:
-                #output width size is 32 and not 128
+                #output width size is 128
 
-                ratio = self.imgSize[0] / self.imgSize[1]
-                split = int(split / ratio)
+                split = int(split)
+                # ratio = self.imgSize[0] / self.imgSize[1]
+                # split = int(split / ratio)
                 try:
                     output_array[split] = 1
                 except IndexError as e:
@@ -188,11 +172,13 @@ class DataLoader:
         targetSplits = []
         
         for i in range(self.testSize):
-            output_array = [0]*self.imgSize[1]
+            output_array = [0]*self.imgSize[0]
+            # output_array = [0]*self.imgSize[1]
             for split in self.testSamples[i].targetSplit:
                 #output width size is 32 and not 128
-                ratio = self.imgSize[0] / self.imgSize[1]
-                split = int(split / ratio)
+                split = int(split)
+                # ratio = self.imgSize[0] / self.imgSize[1]
+                # split = int(split / ratio)
                 output_array[split] = 1
             targetSplits.append(output_array)
 
@@ -206,7 +192,7 @@ class DataLoader:
 
     def vizOutputSplits(self, test_batch):
         numBatchElements = len(test_batch.imgs)
-        confidence_threshold = 0.7
+        confidence_threshold = 0.1
 
         for i in range(numBatchElements):
             img = test_batch.imgs[i].T
@@ -219,8 +205,9 @@ class DataLoader:
             predictedSplits = np.where(predictedSplits >= confidence_threshold)[0]
 
             for split in predictedSplits:
-                ratio = self.imgSize[0] / self.imgSize[1]
-                split = int(split * ratio)
+                split = int(split)
+                # ratio = self.imgSize[0] / self.imgSize[1]
+                # split = int(split * ratio)
                 cv2.line(img, (split,0), (split, img.shape[0]), (0,0,255), 1)
 
             cv2.imwrite(self.viz_dir+str(i)+'.png', img)
