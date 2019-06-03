@@ -228,4 +228,3 @@ class Model:
         self.snapID += self.save_epoch
         self.saver.save(self.sess, path, global_step=self.snapID)
         return
-

@@ -17,10 +17,10 @@ class Sample:
 
 class Batch:
     "batch containing images and ground truth texts"
-    def __init__(self, targetSplits, imgs):
+    def __init__(self, targetSplits, imgs, scaleFactors = (1,1)):
         self.imgs = np.stack(imgs, axis=0)
-        # self.gtTexts = gtTexts
         self.targetSplits = targetSplits
+        self.scaleFactors = scaleFactors
 
 class DataLoader:
     "loads data which corresponds to IAM format, see: http://www.fki.inf.unibe.ch/databases/iam-handwriting-database" 
@@ -35,6 +35,7 @@ class DataLoader:
         self.batchSize = batchSize
         self.imgSize = imgSize
         self.samples = []
+        self.inferSamples = []
         self.viz_dir = '../viz_dir/'
         self.inferDir = '../data/test_words/'
         # Writing your custom loader..
@@ -152,20 +153,33 @@ class DataLoader:
 
             targetSplits.append(output_array)
 
-        imgs = [preprocess(cv2.imread(self.samples[i].filePath+'.png', cv2.IMREAD_GRAYSCALE), self.imgSize, False) for i in batchRange]
+        imgs = []
+        scaleFactors = []
+        for i in batchRange:
+            img = cv2.imread(self.samples[i].filePath+'.png', cv2.IMREAD_GRAYSCALE)
+            img, scaleX, scaleY = preprocess(img, self.imgSize, False)
+            imgs.append(img)
+            scaleFactors.append((scaleX, scaleY))
+        
         self.currIdx += self.batchSize
-        return Batch(targetSplits, imgs)
+        return Batch(targetSplits, imgs, scaleFactors)
 
     def getInferBatch(self):
-        inferSamples = os.listdir(self.inferDir)
+        self.inferSamples = os.listdir(self.inferDir)
 
-        imgs =  [preprocess(cv2.imread(self.inferDir + imgName, cv2.IMREAD_GRAYSCALE), self.imgSize, False) for imgName in inferSamples]
-        
+        imgs = []
+        scaleFactors = []
+        for imgName in self.inferSamples:
+            img = cv2.imread(self.inferDir + imgName, cv2.IMREAD_GRAYSCALE)
+            img, scaleX, scaleY = preprocess(img, self.imgSize, False) 
+            imgs.append(img)
+            scaleFactors.append((scaleX, scaleY))
+
         # Create a batch with blank labels/targetSplits
-        for i in range(len(imgs)):
-            cv2.imwrite('infer_images/'+str(i)+'.png', imgs[i].T.astype(np.uint8))
+        # for i in range(len(imgs)):
+        #     c2v.imwrite('infer_images/'+str(i)+'.png', imgs[i].T.astype(np.uint8))
 
-        return Batch(None, imgs)
+        return Batch(None, imgs, scaleFactors)
 
     def getTestBatch(self):
         # gray scale images of shape (Model.size[1], Model.size[0])
@@ -182,13 +196,19 @@ class DataLoader:
                 output_array[split] = 1
             targetSplits.append(output_array)
 
-        imgs = [preprocess(cv2.imread(self.testSamples[i].filePath+'.png', cv2.IMREAD_GRAYSCALE), self.imgSize, False) for i in range(self.testSize)]
+        imgs = []
+        scaleFactors = []
+        for i in range(self.testSize):
+            img = cv2.imread(self.testSamples[i].filePath+'.png', cv2.IMREAD_GRAYSCALE)
+            img, scaleX, scaleY = preprocess(img, self.imgSize, False) 
+            imgs.append(img)
+            scaleFactors.append((scaleX, scaleY))
 
-        for i in range(len(imgs)):
-            cv2.imwrite('test_images/'+str(i)+'.png', imgs[i].T.astype(np.uint8))
+        # for i in range(len(imgs)):
+        #     cv2.imwrite('test_images/'+str(i)+'.png', imgs[i].T.astype(np.uint8))
 
 
-        return Batch(targetSplits, imgs)
+        return Batch(targetSplits, imgs, scaleFactors)
 
     def vizOutputSplits(self, test_batch):
         numBatchElements = len(test_batch.imgs)
