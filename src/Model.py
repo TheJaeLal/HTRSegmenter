@@ -4,11 +4,9 @@ from __future__ import print_function
 import sys
 import numpy as np
 import os
-
-import tensorflow as tf
 # Disable tensorflow warnings..
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-
+import tensorflow as tf
 
 class Model:
     "minimalistic TF model for HTR"
