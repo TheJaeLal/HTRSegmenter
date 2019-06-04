@@ -18,7 +18,7 @@ A Handwritten Text Recognition(HTR) based cursive character segmenter, using a C
 
 OR
 
-- Install using from requirements.txt  
+- Install using requirements.txt  
 ```pip install -r requirements.txt```
 
 ## Usage
