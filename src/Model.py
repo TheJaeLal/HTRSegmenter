@@ -3,11 +3,14 @@ from __future__ import print_function
 
 import sys
 import numpy as np
-import tensorflow as tf
 import os
 
+import tensorflow as tf
+# Disable tensorflow warnings..
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 
-class Model: 
+
+class Model:
     "minimalistic TF model for HTR"
 
     # model constants
@@ -127,6 +130,7 @@ class Model:
 
     def setupTF(self, modelDir):
         "initialize TF"
+        print("----------------------------------------")
         print('Python: '+sys.version)
         print('Tensorflow: '+tf.__version__)
 
@@ -135,6 +139,7 @@ class Model:
         print('modelDir:', modelDir)
         latestSnapshot = tf.train.latest_checkpoint(modelDir) # is there a saved model?
         print('LatestSnaphshot:',latestSnapshot)
+        print("----------------------------------------")
 
         sess=tf.Session() # TF session
 
@@ -223,8 +228,8 @@ class Model:
         # self.batchesTrained += 1
         return predictedSplits
 
-    def save(self, path):
+    def save(self, save_path):
         "save model to file"
         self.snapID += self.save_epoch
-        self.saver.save(self.sess, path, global_step=self.snapID)
+        self.saver.save(self.sess, save_path, global_step=self.snapID)
         return

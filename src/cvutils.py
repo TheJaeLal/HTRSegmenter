@@ -143,7 +143,7 @@ def draw_hough_lines(original_img, lines, write_output = False):
 
     # if it's a grayscale image convert to color
     if len(img.shape) == 2:
-        print('Converting Grayscale image to color')
+        # print('Converting Grayscale image to color')
         cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     
     thetas = []
@@ -195,20 +195,13 @@ def draw_hough_lines(original_img, lines, write_output = False):
         theta_degree = np.mean(thetas)
 
     if write_output:
-        print("shape of image:", img.shape)
+        # print("shape of image:", img.shape)
         cv2.imwrite('hough_lines_output.png', img)
 
     return theta_degree
 
 
 def correct_slant(word_img):
-    # sample_word  = word_img_files[4]
-#     print('Processing img:',word_img_name, end = ', ')
-    
-#     # load it
-#     color_word_img = cv2.imread(str(sample_word))
-#     word_img = cv2.cvtColor(color_word_img, cv2.COLOR_BGR2GRAY)
-#     cv2.imwrite('inp_word.jpg', word_img)
 
     # binarize it
     bin_word_img = threshold(word_img,method='sauvola', window_size=11)
@@ -219,11 +212,6 @@ def correct_slant(word_img):
 
     ## Label all the connected components
     skel_word_img = skeletonize(bin_word_img, method='lee')
-#     cv2.imwrite('skeleton.jpg', skel_word_img)
-    ## Connected components not required yet
-#     ret, labels = cv2.connectedComponents(skel_word_img)
-#     ccl_img = color_connected_components(labels)
-#     # cv2.imwrite('ccl.jpg', ccl_img)
 
     # Calcluate length of L (vertical structuring element)
     # L = stroke_width / tan(theta)
@@ -232,7 +220,7 @@ def correct_slant(word_img):
 
     L = int(stroke_width)
     # Length of vertical structuring element
-    print("L:", L, end = ', ')
+    # print("L:", L, end = ', ')
 
     ## Remove horizontal strokes, so that the remaining
     # vertical ones can be used to estimate slant angle
@@ -243,14 +231,11 @@ def correct_slant(word_img):
 #     cv2.imwrite('dilated_img.jpg', dilated_img)
     
     opened_img = dilated_img
-#     opened_img = cv2.morphologyEx(~bin_word_img, cv2.MORPH_OPEN, vse, iterations=1)
-#     cv2.imwrite('opened_img.jpg', opened_img)
 
     inverse_open = ~opened_img
 #     cv2.imwrite('inverse_open.jpg', inverse_open)
 
     # Apply edge detection method on the image 
-#     edges = skel_word_img
     edges = cv2.Canny(inverse_open,50,150,apertureSize = 3) 
 #     cv2.imwrite('canny_edge.jpg', edges)
 
@@ -258,23 +243,22 @@ def correct_slant(word_img):
     lines = cv2.HoughLines(edges, 2, np.pi/180, 50)
 
     if lines is None:
-        print("No lines detected!!!")
+        # print("No lines detected!!!")
 #         cv2.imwrite(str(out_dir_unable / word_img_name), word_img)
         return word_img
 
     else:    
-        print("Num of lines detected:", len(lines))
+        # print("Num of lines detected:", len(lines))
 
 #         theta_degrees = draw_hough_lines(word_img, lines, write_output=True)
         theta_degrees = draw_hough_lines(word_img, lines)
         # Average slant
-        print("Theta:", theta_degrees)
+        # print("Theta:", theta_degrees)
 
         sheared_img = create_shear(word_img, angle = math.radians(theta_degrees))   
 #         cv2.imwrite('sheared.jpg', sheared_img)
 
         bin_sheared = threshold(sheared_img,method='sauvola', window_size=11)
-        # cv2.threshold(sheared_img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
 #         cv2.imwrite('bin_sheared.jpg', bin_sheared)
 
         y1,y2,x1,x2 = get_tight_crop(bin_sheared)

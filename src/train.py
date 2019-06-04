@@ -6,9 +6,11 @@ import cv2
 from DataLoader import DataLoader, Batch
 from Model import Model
 import OutputProcessor
+from path_config import path
 
-loader = DataLoader('../data', Model.batchSize, Model.imgSize)
-model = Model('../model/', mustRestore=True)
+loader = DataLoader(path['data'], Model.batchSize, Model.imgSize)
+model = Model(str(path['pretrained_htr_model']), mustRestore=True)
+
 epoch = 0 # number of training epochs since start
 max_epochs = 10
 
@@ -34,7 +36,7 @@ while True:
 
     if epoch%model.save_epoch==0:
         print('Saving model!')
-        model.save('../model/new_models/snapshot')
+        model.save(str(path['save_model'])+'/snapshot')
 
     if epoch >= max_epochs:
         break

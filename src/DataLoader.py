@@ -1,12 +1,15 @@
 from __future__ import division
 from __future__ import print_function
 
-import os
-import random
-import numpy as np
 import cv2
-from SamplePreprocessor import preprocess
 
+import numpy as np
+
+import random
+from pathlib import Path
+
+from SamplePreprocessor import preprocess
+from path_config import path
 
 class Sample:
     "sample from the dataset (X,y)"
@@ -28,18 +31,17 @@ class DataLoader:
     def __init__(self, filePath, batchSize, imgSize):
         "loader for dataset at given location, preprocess images and text according to parameters"
 
-        assert filePath[-1]=='/'
+        # assert filePath[-1]=='/'
 
         self.dataAugmentation = False
         self.currIdx = 0
         self.batchSize = batchSize
         self.imgSize = imgSize
         self.samples = []
-        self.inferSamples = []
-        self.viz_dir = '../viz_dir/'
-        self.inferDir = '../data/test_words/'
+        
+        # self.inferDir = '../data/test_words/'
         # Writing your custom loader..
-        with open(filePath+'words.txt') as f:
+        with open(str(filePath / 'words.txt')) as f:
             labels = f.read().split('\n')
 
         # chars = set()
@@ -54,7 +56,7 @@ class DataLoader:
             
             lineSplit = line.strip().split(',')
             
-            fileName = filePath + 'words/' + lineSplit[0]
+            fileName = str(filePath / 'words' / str(lineSplit[0]+'.png'))
             
             # to be extended to the size of the image...
             splitText = [int(x) for x in lineSplit[1:]]
@@ -75,13 +77,13 @@ class DataLoader:
         self.trainSamples = self.samples
         self.testSamples = []
 
-        with open(filePath+'test_words.txt') as f:
+        with open(str(filePath / 'test_words.txt')) as f:
             test_labels = f.read().split('\n')
 
         for line in test_labels:
             lineSplit = line.strip().split(',')
             
-            fileName = filePath + 'test_words/' + lineSplit[0]
+            fileName = str(filePath / 'test_words' / str(lineSplit[0]+'.png'))
             
             # to be extended to the size of the image...
             splitText = [int(x) for x in lineSplit[1:]]
@@ -156,7 +158,8 @@ class DataLoader:
         imgs = []
         scaleFactors = []
         for i in batchRange:
-            img = cv2.imread(self.samples[i].filePath+'.png', cv2.IMREAD_GRAYSCALE)
+            img = cv2.imread(self.samples[i].filePath, cv2.IMREAD_GRAYSCALE)
+            # print(self.samples[i].filePath)
             img, scaleX, scaleY = preprocess(img, self.imgSize, False)
             imgs.append(img)
             scaleFactors.append((scaleX, scaleY))
@@ -164,14 +167,14 @@ class DataLoader:
         self.currIdx += self.batchSize
         return Batch(targetSplits, imgs, scaleFactors)
 
-    def getInferBatch(self):
-        self.inferSamples = os.listdir(self.inferDir)
+    def getInferBatch(infer_samples, imgSize):
 
         imgs = []
         scaleFactors = []
-        for imgName in self.inferSamples:
-            img = cv2.imread(self.inferDir + imgName, cv2.IMREAD_GRAYSCALE)
-            img, scaleX, scaleY = preprocess(img, self.imgSize, False) 
+        for img_file in infer_samples:
+            img = cv2.imread(str(img_file), cv2.IMREAD_GRAYSCALE)
+            # print(str(img_file))
+            img, scaleX, scaleY = preprocess(img, imgSize, False) 
             imgs.append(img)
             scaleFactors.append((scaleX, scaleY))
 
@@ -199,7 +202,8 @@ class DataLoader:
         imgs = []
         scaleFactors = []
         for i in range(self.testSize):
-            img = cv2.imread(self.testSamples[i].filePath+'.png', cv2.IMREAD_GRAYSCALE)
+            img = cv2.imread(self.testSamples[i].filePath, cv2.IMREAD_GRAYSCALE)
+            # print(self.testSamples[i].filePath)
             img, scaleX, scaleY = preprocess(img, self.imgSize, False) 
             imgs.append(img)
             scaleFactors.append((scaleX, scaleY))
@@ -230,4 +234,4 @@ class DataLoader:
                 # split = int(split * ratio)
                 cv2.line(img, (split,0), (split, img.shape[0]), (0,0,255), 1)
 
-            cv2.imwrite(self.viz_dir+str(i)+'.png', img)
+            cv2.imwrite(str(path['viz_dir'] / str(str(i)+'.png')), img)
