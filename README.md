@@ -13,12 +13,12 @@ A Handwritten Text Recognition(HTR) based cursive character segmenter, using a C
 - Scikit-Image >= 0.15.0
 
 ## Setup
-- Install on Linux-64 using anaconda by create a virtual environment:  
+- Install on Linux-64 using anaconda by creating a virtual environment:  
 ```conda create --name char_segment -f conda_linux_env.txt```
 
 OR
 
-- Install using from requirements.txt  
+- Install using requirements.txt  
 ```pip install -r requirements.txt```
 
 ## Usage
